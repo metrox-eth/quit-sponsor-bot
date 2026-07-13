@@ -1008,6 +1008,9 @@ def selftest():
     sent = []
     send = lambda chat, text, markup=None: sent.append(text)
     think = lambda uid, text: '[sponsor reply to: %s]' % text
+    global notify_operator, tg
+    notify_operator = lambda text: None
+    tg = lambda method, timeout=65, **params: {'ok': True, 'result': []}
     uid, chat = 999001, 999001
 
     import shutil
