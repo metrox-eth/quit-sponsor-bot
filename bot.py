@@ -613,6 +613,9 @@ def about_text():
     )
 
 
+IN_FLIGHT = {}  # uid -> (text, started_ts): duplicate-press guard
+
+
 # ---------- storage ----------
 
 def udir(uid):
@@ -711,11 +714,14 @@ SYSTEM = system_prompt()
 
 
 def think(uid, user_text):
-    messages = ([{'role': 'system', 'content': SYSTEM}]
+    clock = datetime.now().strftime('%A %d %B %Y, %H:%M')
+    system = (SYSTEM + '\n\nServer date and time right now: ' + clock +
+              ' (use this for any date arithmetic; never guess the date).')
+    messages = ([{'role': 'system', 'content': system}]
                 + recent_messages(uid)
                 + [{'role': 'user', 'content': user_text}])
     payload = json.dumps({'model': MODEL, 'messages': messages,
-                          'max_tokens': 700, 'temperature': 0.7}).encode()
+                          'max_tokens': 1000, 'temperature': 0.7}).encode()
     t0 = time.time()
     for attempt in range(2):
         try:
