@@ -1,0 +1,7 @@
+2026-07-13T21:05:25+07:00 ALERT: LLM router returned HTTP 201; users are getting the crisis fallback
+2026-07-13T21:05:27+07:00 ALERT: LLM router returned HTTP 201; users are getting the crisis fallback
+2026-07-13T21:10:28+07:00 ALERT: LLM router returned HTTP 201; users are getting the crisis fallback
+2026-07-13T21:15:29+07:00 ALERT: LLM router returned HTTP 201; users are getting the crisis fallback
+2026-07-13T21:20:32+07:00 ALERT: LLM router returned HTTP 201; users are getting the crisis fallback
+2026-07-13T21:25:34+07:00 ALERT: LLM router returned HTTP 201; users are getting the crisis fallback
+2026-07-13T21:28:00+07:00 ALERT: LLM router gave no completion (); users are getting the crisis fallback
