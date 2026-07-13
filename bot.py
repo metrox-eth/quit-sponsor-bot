@@ -653,6 +653,17 @@ def about_text():
 IN_FLIGHT = {}  # uid -> (text, started_ts): duplicate-press guard
 
 
+def notify_operator(text):
+    op = SECRETS.get('OPERATOR_CHAT_ID')
+    if not op:
+        return
+    try:
+        tg('sendMessage', chat_id=int(op),
+           text='\u2699\ufe0f Ops (operator only): ' + text)
+    except Exception as e:
+        print('operator notify error: %s' % e, flush=True)
+
+
 # ---------- storage ----------
 
 def udir(uid):
@@ -869,12 +880,15 @@ def handle_message(uid, chat, text):
                 p['waitlist'] = datetime.now().isoformat(timespec='seconds')
                 save_profile(uid, p)
                 log(uid, 'system', 'waitlisted (beta full)', kind='event')
+                notify_operator('beta FULL: user %s waitlisted' % uid)
                 send(chat, S(uid, 'WAITLIST', WAITLIST) % BETA_CAP)
                 return
             p['consent'] = datetime.now().isoformat(timespec='seconds')
             p['anchors'] = False
             save_profile(uid, p)
             log(uid, 'system', 'consent given', kind='event')
+            notify_operator('new consent: user %s (lang %s), %d/%d beta spots used'
+                            % (uid, p.get('lang', '?'), consented_count(), BETA_CAP))
             pack = L10N.get(lang_of(uid))
             markup = {'inline_keyboard': pack['ONB_BUTTONS']} if pack else ONB_KEYBOARD
             send(chat, S(uid, 'CONSENTED', CONSENTED), markup=markup)
