@@ -55,6 +55,43 @@ def load_llm_key():
 
 LLM_KEY = load_llm_key()
 
+
+def load_cipher():
+    """Logbook encryption at rest. Honest scope: the key lives on the same
+    server, so this protects against disk theft and stray backups, not
+    against the operator."""
+    try:
+        from cryptography.fernet import Fernet
+    except ImportError:
+        print('cryptography lib missing: logbooks stored in plaintext', flush=True)
+        return None
+    key = SECRETS.get('LOGBOOK_KEY', '')
+    if not key:
+        key = Fernet.generate_key().decode()
+        with open(BASE / 'secrets.env', 'a') as f:
+            f.write('LOGBOOK_KEY=%s\n' % key)
+        SECRETS['LOGBOOK_KEY'] = key
+        print('logbook encryption key generated into secrets.env', flush=True)
+    return Fernet(key.encode())
+
+
+CIPHER = load_cipher()
+
+
+def seal(text):
+    if CIPHER is None:
+        return text
+    return 'enc:' + CIPHER.encrypt(text.encode()).decode()
+
+
+def unseal(text):
+    if isinstance(text, str) and text.startswith('enc:') and CIPHER is not None:
+        try:
+            return CIPHER.decrypt(text[4:].encode()).decode()
+        except Exception:
+            return '[unreadable entry]'
+    return text
+
 BOT_PREAMBLE = (
     "You are the quit-smoking sponsor defined by the two documents above, "
     "operating as a Telegram bot in a private beta. The person you are talking "
@@ -637,7 +674,7 @@ def save_profile(uid, p):
 
 def log(uid, role, text, kind='message'):
     entry = {'ts': datetime.now().isoformat(timespec='seconds'),
-             'role': role, 'kind': kind, 'text': text}
+             'role': role, 'kind': kind, 'text': seal(text)}
     with open(udir(uid) / 'logbook.jsonl', 'a') as f:
         f.write(json.dumps(entry, ensure_ascii=False) + '\n')
 
@@ -656,7 +693,7 @@ def recent_messages(uid, n=CONTEXT_TURNS):
         if e.get('kind') != 'message':
             continue
         role = 'assistant' if e['role'] == 'sponsor' else 'user'
-        out.append({'role': role, 'content': e['text']})
+        out.append({'role': role, 'content': unseal(e['text'])})
     return out[-n:]
 
 
@@ -759,8 +796,18 @@ def handle_command(uid, chat, text):
     elif cmd == '/export':
         f = udir(uid) / 'logbook.jsonl'
         if f.exists():
-            send_file(chat, str(f),
+            out = udir(uid) / 'logbook_export.jsonl'
+            with open(out, 'w') as o:
+                for line in open(f):
+                    try:
+                        e = json.loads(line)
+                    except ValueError:
+                        continue
+                    e['text'] = unseal(e.get('text', ''))
+                    o.write(json.dumps(e, ensure_ascii=False) + '\n')
+            send_file(chat, str(out),
                       S(uid, 'EXPORT_CAPTION', 'Your logbook. Yours, entirely.'))
+            out.unlink()
         else:
             send(chat, S(uid, 'EXPORT_EMPTY', 'Your logbook is empty so far.'))
     elif cmd == '/delete':
@@ -973,6 +1020,17 @@ def selftest():
     handle_command(uid, chat, '/delete')
     handle_message(uid, chat, 'DELETE')
     assert not (DATA / str(uid)).exists(), 'delete must be real'
+    if CIPHER is not None:
+        uid2 = 999005
+        if udir(uid2).exists():
+            shutil.rmtree(udir(uid2))
+        log(uid2, 'user', 'secret confession xyzzy')
+        raw = (udir(uid2) / 'logbook.jsonl').read_text()
+        assert 'xyzzy' not in raw, 'plaintext leaked to disk'
+        msgs = recent_messages(uid2)
+        assert msgs and 'xyzzy' in msgs[-1]['content'], 'decrypt roundtrip failed'
+        shutil.rmtree(udir(uid2))
+        print('encryption roundtrip OK (ciphertext on disk, plaintext in context)')
     print('selftest OK (%d messages)' % len(sent))
 
 

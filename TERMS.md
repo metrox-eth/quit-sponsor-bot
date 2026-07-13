@@ -18,7 +18,7 @@ Adults (18+). The beta is invitation-only and free.
 
 ## Your data
 
-- **What we store:** your messages, the sponsor's replies, and your logbook (timestamps, declared events, the contract, your risk map), on an operator-controlled server.
+- **What we store:** your messages, the sponsor's replies, and your logbook (timestamps, declared events, the contract, your risk map), on an operator-controlled server, with message content encrypted at rest. Honest scope: the decryption key lives on the same server, so encryption protects against disk theft and stray backups, not against the operator.
 - **What happens at inference (beta):** to generate replies, your messages are routed through Virtuals Protocol compute to the model named in the bot's `/about` command. Honest status as of July 2026: Virtuals publishes no data-retention or privacy policy for that routing layer, so for this beta you should assume message content is visible to the routing infrastructure and to the model provider. We say this plainly instead of guessing in your favor. The public launch is gated on a verified-privacy inference route (for example Venice's API, whose published architecture stores no prompts server-side and offers modes up to E2EE, or inference on hardware we control); this beta clause will be rewritten when that switch happens, and you will be notified in the bot.
 - **Your rights:** export everything with one command, delete everything with one command, both executed without argument. Deletion is real.
 - **What we never do:** sell your data, run ads, train models on your content, quote your logbook anywhere, or surface your quit to anyone else.

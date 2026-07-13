@@ -13,7 +13,11 @@ protocol repo carries the evidence (references, model fit test).
   router (GLM-5-turbo by default, chosen by measured fit, see the protocol's
   MODEL_FIT.md). Model and privacy status disclosed in /about.
 - One directory per user under `data/`: `logbook.jsonl` (every message and
-  event, timestamped) and `profile.json` (consent, settings).
+  event, timestamped, content encrypted at rest) and `profile.json` (consent,
+  settings). Honest scope of the encryption: the key lives on the same server
+  (the bot must read the logbook to think), so it protects against disk theft
+  and stray backups, not against the operator. /export decrypts: the person's
+  data reaches them readable.
 - Consent gate before any sponsoring: nobody talks to the sponsor without
   accepting the ground rules (adult, not medical, not emergency, data terms).
 - /export sends the person their full logbook; /delete erases everything
