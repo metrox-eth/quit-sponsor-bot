@@ -3,7 +3,7 @@
 
 Single process, long polling, no dependencies beyond the standard library.
 The sponsor brain is the open protocol (SKILL.md + SAFETY.md) as system
-prompt, inference via the Virtuals compute router. One data directory per
+prompt, inference via an OpenAI-compatible LLM route (see secrets.env). One data directory per
 user: logbook.jsonl (every event, timestamped) + profile.json (consent,
 settings). Export and delete are real and one command each (ETHICS.md).
 """
@@ -638,11 +638,13 @@ HELP = (
 
 def about_text():
     return (
-        "Model: %s, routed through Virtuals Protocol compute.\n"
-        "Honest privacy status (beta): Virtuals publishes no retention policy "
-        "for its routing layer, so assume message content is visible to the "
-        "route and the model provider. The public launch is gated on a "
-        "verified-privacy route (see /terms).\n"
+        "Model: %s, called directly on the API of Z.AI, the company that "
+        "makes the GLM models.\n"
+        "Honest privacy status (beta): we have not independently verified "
+        "the provider's retention practices, so assume message content is "
+        "visible to the model provider; their published privacy policy "
+        "governs. The public launch is gated on a verified-privacy route "
+        "(see /terms).\n"
         "Protocol: https://github.com/metrox-eth/quit-sponsor (open source, "
         "including the model fit test this model passed).\n"
         "Operator: metrox (private beta, individual operator).\n"

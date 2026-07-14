@@ -26,19 +26,22 @@ if ! curl -s -m 15 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe" | g
   alert "Telegram is unreachable from the rig (network or token problem). The bot is running but may be deaf."
 fi
 
-# 3. LLM router actually answering? Judge the body (router returns 201 on
-# success) and retry once before alerting: a single blip is not an outage.
+# 3. LLM route actually answering? Same URL/key/model the bot uses (sourced
+# from secrets.env, with the historical Virtuals/ccr fallback). Judge the
+# body, not the status code, and retry once: a single blip is not an outage.
 if [ -n "${LLM_PING:-1}" ]; then
   KEY="${LLM_API_KEY:-$(python3 -c "import json;c=json.load(open('/home/openclaw/.claude-code-router/config.json'));print((c.get('Providers') or c.get('providers'))[0]['api_key'])")}"
+  URL="${LLM_URL:-https://compute.virtuals.io/v1/chat/completions}"
+  MODEL="${SPONSOR_MODEL:-z-ai-glm-5-turbo}"
   OK=0
   for try in 1 2; do
-    BODY=$(curl -s -m 25 "https://compute.virtuals.io/v1/chat/completions" \
+    BODY=$(curl -s -m 25 "${URL}" \
       -H "Authorization: Bearer ${KEY}" -H 'Content-Type: application/json' \
-      -d '{"model":"z-ai-glm-5-turbo","messages":[{"role":"user","content":"ping"}],"max_tokens":8}')
+      -d "{\"model\":\"${MODEL}\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":64}")
     if echo "$BODY" | grep -q '"choices"'; then OK=1; break; fi
     sleep 10
   done
   if [ "$OK" != "1" ]; then
-    alert "the AI brain is not answering (checked twice). Users currently receive the emergency fallback message. Check the Virtuals router and the credits."
+    alert "the AI brain is not answering (checked twice). Users currently receive the emergency fallback message. Check the LLM route and its quota (${URL})."
   fi
 fi
