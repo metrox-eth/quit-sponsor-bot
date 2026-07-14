@@ -763,6 +763,33 @@ def system_prompt():
 SYSTEM = system_prompt()
 
 
+def llm_routes():
+    """Ordered failover chain. A sponsor must answer at 2 a.m.: two flaky but
+    independent routes beat one. Primary from secrets.env; the historical
+    Virtuals route (ccr key) as fallback when its config is present.
+    Each route: (name, url, key, model, extra payload, timeout seconds)."""
+    routes = []
+    zai = 'api.z.ai' in LLM_URL
+    # Z.AI: thinking disabled = seconds instead of 15-30s of reasoning before
+    # every reply; crisis doctrine wants short and fast. Short timeout because
+    # this endpoint stalls intermittently: fail over rather than hang.
+    extra = {'thinking': {'type': 'disabled'}} if zai else {}
+    routes.append(('primary', LLM_URL, LLM_KEY, MODEL, extra, 20 if zai else 45))
+    try:
+        cfg = json.load(open(os.path.expanduser('~/.claude-code-router/config.json')))
+        vkey = (cfg.get('Providers') or cfg.get('providers'))[0]['api_key']
+        vurl = 'https://compute.virtuals.io/v1/chat/completions'
+        if vurl != LLM_URL:
+            routes.append(('virtuals', vurl, vkey, 'z-ai-glm-5-turbo', {}, 45))
+    except Exception:
+        pass
+    routes.append(routes[0])  # one last try on the primary
+    return routes
+
+
+ROUTES = llm_routes()
+
+
 def think(uid, user_text):
     clock = datetime.now().strftime('%A %d %B %Y, %H:%M')
     system = (SYSTEM + '\n\nServer date and time right now: ' + clock +
@@ -770,25 +797,27 @@ def think(uid, user_text):
     messages = ([{'role': 'system', 'content': system}]
                 + recent_messages(uid)
                 + [{'role': 'user', 'content': user_text}])
-    payload = json.dumps({'model': MODEL, 'messages': messages,
-                          'max_tokens': 1000, 'temperature': 0.7}).encode()
     t0 = time.time()
-    for attempt in range(2):
+    for name, url, key, model, extra, tmo in ROUTES:
+        body = {'model': model, 'messages': messages,
+                'max_tokens': 1000, 'temperature': 0.7}
+        body.update(extra)
         try:
-            req = urllib.request.Request(LLM_URL, data=payload, headers={
-                'Authorization': 'Bearer ' + LLM_KEY,
+            req = urllib.request.Request(url, data=json.dumps(body).encode(),
+                                         headers={
+                'Authorization': 'Bearer ' + key,
                 'Content-Type': 'application/json'})
-            with urllib.request.urlopen(req, timeout=45) as r:
+            with urllib.request.urlopen(req, timeout=tmo) as r:
                 d = json.loads(r.read())
             text = d['choices'][0]['message']['content'].strip()
             if text:
-                print('llm ok %.1fs (attempt %d)' % (time.time() - t0, attempt),
+                print('llm ok via %s %.1fs' % (name, time.time() - t0),
                       flush=True)
                 return text
         except Exception as e:
-            print('llm error (%d, %.1fs): %s' % (attempt, time.time() - t0, e),
+            print('llm error via %s (%.1fs): %s' % (name, time.time() - t0, e),
                   flush=True)
-            time.sleep(2)
+            time.sleep(1)
     return None
 
 

@@ -26,22 +26,29 @@ if ! curl -s -m 15 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe" | g
   alert "Telegram is unreachable from the rig (network or token problem). The bot is running but may be deaf."
 fi
 
-# 3. LLM route actually answering? Same URL/key/model the bot uses (sourced
-# from secrets.env, with the historical Virtuals/ccr fallback). Judge the
-# body, not the status code, and retry once: a single blip is not an outage.
+# 3. LLM chain actually answering? Mirror the bot's failover: primary route
+# from secrets.env (thinking disabled, short timeout, like the bot), then the
+# historical Virtuals fallback (ccr key). Users only see the emergency
+# fallback message when EVERY route fails, so alert only on a full-chain
+# outage: a single flaky rail is the failover's job, not the operator's.
 if [ -n "${LLM_PING:-1}" ]; then
-  KEY="${LLM_API_KEY:-$(python3 -c "import json;c=json.load(open('/home/openclaw/.claude-code-router/config.json'));print((c.get('Providers') or c.get('providers'))[0]['api_key'])")}"
-  URL="${LLM_URL:-https://compute.virtuals.io/v1/chat/completions}"
-  MODEL="${SPONSOR_MODEL:-z-ai-glm-5-turbo}"
   OK=0
-  for try in 1 2; do
-    BODY=$(curl -s -m 25 "${URL}" \
-      -H "Authorization: Bearer ${KEY}" -H 'Content-Type: application/json' \
-      -d "{\"model\":\"${MODEL}\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":64}")
-    if echo "$BODY" | grep -q '"choices"'; then OK=1; break; fi
-    sleep 10
-  done
+  if [ -n "${LLM_URL:-}" ] && [ -n "${LLM_API_KEY:-}" ]; then
+    BODY=$(curl -s -m 20 "${LLM_URL}" \
+      -H "Authorization: Bearer ${LLM_API_KEY}" -H 'Content-Type: application/json' \
+      -d "{\"model\":\"${SPONSOR_MODEL:-glm-5-turbo}\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}],\"max_tokens\":64,\"thinking\":{\"type\":\"disabled\"}}")
+    echo "$BODY" | grep -q '"choices"' && OK=1
+  fi
   if [ "$OK" != "1" ]; then
-    alert "the AI brain is not answering (checked twice). Users currently receive the emergency fallback message. Check the LLM route and its quota (${URL})."
+    VKEY=$(python3 -c "import json;c=json.load(open('/home/openclaw/.claude-code-router/config.json'));print((c.get('Providers') or c.get('providers'))[0]['api_key'])" 2>/dev/null)
+    if [ -n "$VKEY" ]; then
+      BODY=$(curl -s -m 30 "https://compute.virtuals.io/v1/chat/completions" \
+        -H "Authorization: Bearer ${VKEY}" -H 'Content-Type: application/json' \
+        -d '{"model":"z-ai-glm-5-turbo","messages":[{"role":"user","content":"ping"}],"max_tokens":64}')
+      echo "$BODY" | grep -q '"choices"' && OK=1
+    fi
+  fi
+  if [ "$OK" != "1" ]; then
+    alert "the AI brain CHAIN is down: primary and Virtuals fallback both failed. Users currently receive the emergency fallback message. Check ${LLM_URL:-the LLM routes}."
   fi
 fi
